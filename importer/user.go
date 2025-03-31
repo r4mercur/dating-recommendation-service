@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/elastic/go-elasticsearch/v8"
@@ -17,6 +19,8 @@ import (
 const (
 	UsersIndex = "users" // Index name constant
 	BatchSize  = 100     // Batch size for bulk requests
+	maxRetries = 3
+	retryDelay = 2 * time.Second
 )
 
 func ImportUsersAndAddToElasticIndex() {
@@ -26,7 +30,7 @@ func ImportUsersAndAddToElasticIndex() {
 	}
 
 	log.Printf("Index '%s' is empty. Importing data...", UsersIndex)
-	users := createFakeUsers(1000) // Generate 1000 fake users
+	users := createFakeUsers(100_000)
 	addUsersToElasticIndex(users)
 	log.Println("Data import completed.")
 }
@@ -81,6 +85,7 @@ func createFakeUsers(count int) []*data.User {
 
 func addUsersToElasticIndex(users []*data.User) {
 	esClient := search.GetElasticClient()
+	var wg sync.WaitGroup
 
 	for i := 0; i < len(users); i += BatchSize {
 		end := i + BatchSize
@@ -89,12 +94,17 @@ func addUsersToElasticIndex(users []*data.User) {
 		}
 
 		batch := users[i:end]
-		if err := sendBulkRequest(esClient, batch); err != nil {
-			log.Fatalf("Error sending bulk request: %s", err)
-		}
-
-		log.Printf("Indexed batch %d-%d of %d users", i+1, end, len(users))
+		wg.Add(1)
+		go func(batch []*data.User) {
+			defer wg.Done()
+			if err := sendBulkRequest(esClient, batch); err != nil {
+				log.Printf("Error sending bulk request: %s", err)
+			}
+			log.Printf("Indexed batch %d-%d of %d users", i+1, end, len(users))
+		}(batch)
 	}
+
+	wg.Wait()
 }
 
 func sendBulkRequest(esClient *elasticsearch.Client, users []*data.User) error {
@@ -112,23 +122,31 @@ func sendBulkRequest(esClient *elasticsearch.Client, users []*data.User) error {
 		bulkRequest.WriteString("\n")
 	}
 
-	res, err := esClient.Bulk(
-		strings.NewReader(bulkRequest.String()),
-		esClient.Bulk.WithIndex(UsersIndex),
-	)
-	if err != nil {
-		return fmt.Errorf("error sending bulk request: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+	for i := 0; i < maxRetries; i++ {
+		res, err := esClient.Bulk(
+			strings.NewReader(bulkRequest.String()),
+			esClient.Bulk.WithIndex(UsersIndex),
+		)
 		if err != nil {
-			log.Printf("Error closing response body: %s", err)
+			return fmt.Errorf("error sending bulk request: %w", err)
 		}
-	}(res.Body)
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				log.Printf("Error closing response body: %s", err)
+			}
+		}(res.Body)
 
-	if res.IsError() {
-		return fmt.Errorf("bulk request failed: %s", res.String())
+		if res.IsError() {
+			if res.StatusCode == 429 { // Too Many Requests
+				time.Sleep(retryDelay)
+				continue
+			}
+			return fmt.Errorf("bulk request failed: %s", res.String())
+		}
+
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("max retries reached")
 }
