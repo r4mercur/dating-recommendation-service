@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 
@@ -40,7 +41,12 @@ func checkIfIndexHasData(indexName string) bool {
 	if err != nil {
 		log.Fatalf("Error checking if index '%s' has data: %s", indexName, err)
 	}
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %s", err)
+		}
+	}(res.Body)
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
@@ -113,7 +119,12 @@ func sendBulkRequest(esClient *elasticsearch.Client, users []*data.User) error {
 	if err != nil {
 		return fmt.Errorf("error sending bulk request: %w", err)
 	}
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %s", err)
+		}
+	}(res.Body)
 
 	if res.IsError() {
 		return fmt.Errorf("bulk request failed: %s", res.String())

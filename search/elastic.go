@@ -2,6 +2,7 @@ package search
 
 import (
 	"crypto/tls"
+	"io"
 	"log"
 	"net/http"
 
@@ -41,7 +42,12 @@ func createIndexIfNotExists(es *elasticsearch.Client, indexName string) {
 		log.Fatalf("The index %s could not be checked for existence: %s", indexName, err)
 	}
 
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %s", err)
+		}
+	}(res.Body)
 
 	if res.StatusCode == http.StatusOK {
 		log.Printf("The index %s already exists", indexName)
@@ -60,7 +66,12 @@ func createIndex(es *elasticsearch.Client, indexName string) {
 		log.Fatalf("The index %s could not be created: %s", indexName, err)
 	}
 
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %s", err)
+		}
+	}(res.Body)
 
 	log.Printf("The index %s has been created", indexName)
 }

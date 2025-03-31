@@ -1,0 +1,7 @@
+@userId = 2aec576c-6449-4052-92bf-ad7b6fe5487d
+
+### POST create fake users
+POST http://localhost:8080/users/create/fake-users
+
+### Get user recommendations
+GET http://localhost:8080/users/recommendations/{{ userId }}

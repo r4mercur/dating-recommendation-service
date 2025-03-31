@@ -25,5 +25,8 @@ func main() {
 	routes.RegisterHealthcheckRoutes(r)
 	routes.RegisterUserRoutes(r)
 
-	r.Run()
+	err = r.Run()
+	if err != nil {
+		return
+	}
 }
