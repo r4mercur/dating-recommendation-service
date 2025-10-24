@@ -21,6 +21,7 @@ func main() {
 
 	r := gin.Default()
 	search.InitElasticClient(elasticUser, elasticPassword)
+	search.InitPostgresClient()
 
 	routes.RegisterHealthcheckRoutes(r)
 	routes.RegisterUserRoutes(r)

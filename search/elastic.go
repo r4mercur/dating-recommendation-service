@@ -58,6 +58,10 @@ func createIndexIfNotExists(es *elasticsearch.Client, indexName string) {
 		createIndex(es, indexName)
 		return
 	}
+
+	if res.StatusCode == http.StatusUnauthorized {
+		log.Fatalf("The index %s could not be checked for existence: %s", indexName, err)
+	}
 }
 
 func createIndex(es *elasticsearch.Client, indexName string) {
