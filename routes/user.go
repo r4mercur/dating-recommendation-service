@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+
 	"recommandation.com/m/importer"
 	"recommandation.com/m/search"
 
@@ -13,6 +14,9 @@ func RegisterUserRoutes(router *gin.Engine) {
 	{
 		userRoutes.POST("/create/fake-users", importFakeUsers)
 		userRoutes.GET("/recommendations/:userId", getUserRecommendations)
+
+		// single user
+		userRoutes.GET("/:userId", getUser)
 	}
 }
 
@@ -26,6 +30,19 @@ func getUserRecommendations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"userId":          userId,
 		"recommendations": recommendations,
+	})
+}
+
+func getUser(c *gin.Context) {
+	userId := c.Param("userId")
+	user, err := search.FetchUserFromPostgres(userId)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"user": user,
 	})
 }
 

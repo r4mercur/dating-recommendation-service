@@ -12,6 +12,7 @@ import (
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/lib/pq"
 	"recommandation.com/m/data"
 	"recommandation.com/m/search"
 )
@@ -112,7 +113,8 @@ func addUsersToPostgresDatabase(users []*data.User) {
 	// TODO: Use go routines or multi processing to speed up the insertion process
 	pgClient := search.GetPostgresClient()
 	for _, user := range users {
-		_, err := pgClient.Exec("INSERT INTO users (id, name, email, interest, hobby, age, address) VALUES ($1, $2, $3, $4, $5, $6, $7)", user.ID, user.Name, user.Email, user.Interest, user.Hobby, user.Age, user.Address)
+		_, err := pgClient.Exec("INSERT INTO users (id, name, email, interest, hobby, age, address) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+			user.ID, user.Name, user.Email, pq.Array(user.Interest), pq.Array(user.Hobby), user.Age, user.Address)
 		if err != nil {
 			log.Printf("Error inserting user into database: %s", err)
 		}
