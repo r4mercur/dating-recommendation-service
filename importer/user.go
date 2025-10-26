@@ -30,9 +30,8 @@ func ImportUsersAndAddToElasticIndex() {
 	}
 
 	log.Printf("Index '%s' is empty. Importing data...", UsersIndex)
-	users := createFakeUsers(100)
+	users := createFakeUsers(100_000)
 	addUsersToElasticIndex(users)
-	addUsersToPostgresDatabase(users)
 	log.Println("Data import completed.")
 }
 
@@ -106,19 +105,6 @@ func addUsersToElasticIndex(users []*data.User) {
 	}
 
 	wg.Wait()
-}
-
-func addUsersToPostgresDatabase(users []*data.User) {
-	// TODO: Use go routines or multi processing to speed up the insertion process
-	pgClient := search.GetPostgresClient()
-	for _, user := range users {
-		_, err := pgClient.Exec("INSERT INTO users (id, name, email, interest, hobby, age, address) VALUES ($1, $2, $3, $4, $5, $6, $7)", user.ID, user.Name, user.Email, user.Interest, user.Hobby, user.Age, user.Address)
-		if err != nil {
-			log.Printf("Error inserting user into database: %s", err)
-		}
-	}
-
-	search.ClosePostgresClient()
 }
 
 func sendBulkRequest(esClient *elasticsearch.Client, users []*data.User) error {
