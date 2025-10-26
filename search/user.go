@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-
-	"recommandation.com/m/data"
 )
 
 func FetchRecommendationsFromElastic(userId string) ([]string, error) {
@@ -144,14 +142,4 @@ func FetchRecommendationsFromElastic(userId string) ([]string, error) {
 	}
 
 	return recommendations, nil
-}
-
-func FetchUserFromPostgres(userId string) (*data.User, error) {
-	postgresClient := GetPostgresClient()
-	var user data.User
-	err := postgresClient.QueryRow("SELECT * FROM users WHERE id = $1", userId).Scan(&user.ID, &user.Name, &user.Email, &user.Interest, &user.Hobby, &user.Age, &user.Address)
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
 }
