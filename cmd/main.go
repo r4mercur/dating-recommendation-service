@@ -25,7 +25,7 @@ func main() {
 	routes.RegisterHealthcheckRoutes(r)
 	routes.RegisterUserRoutes(r)
 
-	err = r.Run()
+	err = r.Run(":3000")
 	if err != nil {
 		return
 	}

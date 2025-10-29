@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +31,7 @@ func ImportUsersAndAddToElasticIndex() {
 	}
 
 	log.Printf("Index '%s' is empty. Importing data...", UsersIndex)
-	users := createFakeUsers(100_000)
+	users := createFakeUsers(1000)
 	addUsersToElasticIndex(users)
 	log.Println("Data import completed.")
 }
@@ -67,7 +68,9 @@ func createFakeUsers(count int) []*data.User {
 	gofakeit.Seed(0)
 
 	var users []*data.User
+
 	for i := 0; i < count; i++ {
+		fakeAddr := gofakeit.Address()
 		user := &data.User{
 			ID:       gofakeit.UUID(),
 			Name:     gofakeit.Name(),
@@ -75,7 +78,12 @@ func createFakeUsers(count int) []*data.User {
 			Interest: []string{gofakeit.RandomString([]string{"music", "sports", "movies", "books", "travel"}), gofakeit.RandomString([]string{"music", "sports", "movies", "books", "travel"})},
 			Hobby:    []string{gofakeit.RandomString([]string{"music", "sports", "movies", "books", "travel"}), gofakeit.RandomString([]string{"music", "sports", "movies", "books", "travel"})},
 			Age:      gofakeit.Number(18, 60),
-			Address:  gofakeit.Address().Address,
+			Address: data.Address{
+				Street:  fakeAddr.Street,
+				City:    fakeAddr.City,
+				Zip:     fakeAddr.Zip,
+				Country: fakeAddr.Country,
+			},
 		}
 		users = append(users, user)
 	}
@@ -107,8 +115,59 @@ func addUsersToElasticIndex(users []*data.User) {
 	wg.Wait()
 }
 
+func postUserToUserService(user *data.User) error {
+	userServiceReq := data.UserServiceRequest{
+		ReferenceID: user.ID,
+		Name:        user.Name,
+		Email:       user.Email,
+		Password:    "",
+		Interests:   user.Interest,
+		Hobbies:     user.Hobby,
+		Age:         user.Age,
+		Address: data.Address{
+			Street:  user.Address.Street,
+			City:    user.Address.City,
+			Zip:     user.Address.Zip,
+			Country: user.Address.Country,
+		},
+		Gender: strings.ToUpper(gofakeit.Gender()),
+		Status: "ACTIVE",
+		Photo:  "https://example.com/photo.jpg",
+	}
+
+	userJSON, err := json.Marshal(userServiceReq)
+	if err != nil {
+		return fmt.Errorf("error marshaling user to JSON: %w", err)
+	}
+
+	resp, err := http.Post("http://localhost:8080/api/user?useDefaultPW=true", "application/json", bytes.NewBuffer(userJSON))
+	if err != nil {
+		return fmt.Errorf("error sending POST request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %s", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("user service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 func sendBulkRequest(esClient *elasticsearch.Client, users []*data.User) error {
 	var bulkRequest bytes.Buffer
+
+	// send all to user service
+	for _, user := range users {
+		if err := postUserToUserService(user); err != nil {
+			log.Printf("Error posting user %s to user service: %s", user.ID, err)
+		}
+	}
 
 	for _, user := range users {
 		meta := fmt.Sprintf(`{"index":{"_index":"%s"}}`, UsersIndex)
