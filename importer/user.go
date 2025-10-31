@@ -24,6 +24,38 @@ const (
 	retryDelay = 2 * time.Second
 )
 
+func ImportSingleUserAndAddToElasticIndex(user *data.User) error {
+	esClient := search.GetElasticClient()
+
+	userJSON, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("error when marshaling user: %w", err)
+	}
+
+	res, err := esClient.Index(
+		UsersIndex,
+		strings.NewReader(string(userJSON)),
+		esClient.Index.WithDocumentID(user.ID),
+		esClient.Index.WithRefresh("true"),
+	)
+	if err != nil {
+		return fmt.Errorf("error when trying to add user to index: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("error when closing request body: %s", err)
+		}
+	}(res.Body)
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("elasticsearch-error: %s", string(body))
+	}
+
+	return nil
+}
+
 func ImportUsersAndAddToElasticIndex() {
 	if checkIfIndexHasData(UsersIndex) {
 		log.Printf("Index '%s' already has data. Skipping import.", UsersIndex)
