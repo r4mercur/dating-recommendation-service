@@ -172,7 +172,7 @@ func postUserToUserService(user *data.User) error {
 		return fmt.Errorf("error marshaling user to JSON: %w", err)
 	}
 
-	resp, err := http.Post("http://localhost:8080/api/user?useDefaultPW=true", "application/json", bytes.NewBuffer(userJSON))
+	resp, err := http.Post("http://localhost:8080/api/user?useDefaultPW=true&addNotToSearchIndex=true", "application/json", bytes.NewBuffer(userJSON))
 	if err != nil {
 		return fmt.Errorf("error sending POST request: %w", err)
 	}
