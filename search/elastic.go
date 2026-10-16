@@ -2,76 +2,38 @@ package search
 
 import (
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"recommandation.com/m/config"
 )
 
-var esClient *elasticsearch.Client
-
-func InitElasticClient(user string, password string) {
-	config := elasticsearch.Config{
-		Addresses: []string{
-			"https://localhost:9200",
-		},
-		Username: user,
-		Password: password,
+func NewClient(cfg config.Config) (*elasticsearch.Client, error) {
+	client, err := elasticsearch.NewClient(elasticsearch.Config{
+		Addresses: []string{cfg.ElasticURL},
+		Username:  cfg.ElasticUser,
+		Password:  cfg.ElasticPassword,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.ElasticInsecureSkipVerify},
 		},
-	}
-
-	client, err := elasticsearch.NewClient(config)
+	})
 	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
+		return nil, fmt.Errorf("error creating elasticsearch client: %w", err)
 	}
-
-	esClient = client
-	createIndexIfNotExists(esClient, "users")
+	return client, nil
 }
 
-func GetElasticClient() *elasticsearch.Client {
-	return esClient
-}
-
-func createIndexIfNotExists(es *elasticsearch.Client, indexName string) {
-	res, err := es.Indices.Exists([]string{indexName})
-	if err != nil {
-		log.Fatalf("The index %s could not be checked for existence: %s", indexName, err)
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Error closing response body: %s", err)
-		}
-	}(res.Body)
-
-	if res.StatusCode == http.StatusOK {
-		log.Printf("The index %s already exists", indexName)
-		return
-	}
-
-	if res.StatusCode == http.StatusNotFound {
-		createIndex(es, indexName)
-		return
+func closeBody(res *esapi.Response) {
+	if err := res.Body.Close(); err != nil {
+		log.Printf("error closing response body: %s", err)
 	}
 }
 
-func createIndex(es *elasticsearch.Client, indexName string) {
-	res, err := es.Indices.Create(indexName)
-	if err != nil {
-		log.Fatalf("The index %s could not be created: %s", indexName, err)
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Error closing response body: %s", err)
-		}
-	}(res.Body)
-
-	log.Printf("The index %s has been created", indexName)
+func responseError(op string, res *esapi.Response) error {
+	body, _ := io.ReadAll(res.Body)
+	return fmt.Errorf("%s: elasticsearch returned %s: %s", op, res.Status(), body)
 }

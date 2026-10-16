@@ -1,7 +1,27 @@
 @userId = 2aec576c-6449-4052-92bf-ad7b6fe5487d
 
 ### POST create fake users
-POST http://localhost:3000/users/create/fake-users
+POST http://localhost:3000/users/create/fake-users?count=1000
+
+### POST import a single user
+POST http://localhost:3000/users/import/user
+Content-Type: application/json
+
+{
+  "id": "{{ userId }}",
+  "name": "Max Mustermann",
+  "email": "max@example.com",
+  "interest": ["music", "travel"],
+  "hobby": ["hiking", "cooking"],
+  "age": 29,
+  "gender": "MALE",
+  "status": "ACTIVE",
+  "address": { "street": "Unter den Linden 1", "city": "Berlin", "zip": "10117", "country": "Germany" },
+  "location": { "lat": 52.5170, "lon": 13.3889 }
+}
 
 ### Get user recommendations
 GET http://localhost:3000/users/recommendations/{{ userId }}
+
+### Get user recommendations with filters
+GET http://localhost:3000/users/recommendations/{{ userId }}?radiusKm=25&limit=20&minAge=25&maxAge=35&gender=female
